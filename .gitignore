@@ -1,0 +1,11 @@
+# go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+
+# logging
+debug.log
+
