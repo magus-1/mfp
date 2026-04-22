@@ -61,7 +61,7 @@ type Model struct {
 }
 
 func NewModel() Model {
-	episodes := feed.HardcodedEpisodes()
+	episodes, _ := feed.FetchEpisodes()
 
 	items := make([]list.Item, len(episodes))
 	for i, ep := range episodes {
