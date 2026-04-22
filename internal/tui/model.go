@@ -2,10 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"log"
+	"math/rand"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
 	"github.com/magus-1/mfp/internal/feed"
 	"github.com/magus-1/mfp/internal/player"
 )
@@ -15,25 +19,22 @@ import (
 var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("#C9A0DC")).
+			Foreground(lipgloss.Color("#BD93F9")).
 			MarginLeft(2)
 
-	// Status bar base — full width blue background
 	statusBarStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Background(lipgloss.Color("#6C91BF"))
+			Foreground(lipgloss.Color("#F8F8F2")).
+			Background(lipgloss.Color("#44475A"))
 
-	// These render TEXT ONLY — no background — the outer statusBarStyle provides it
 	playingTextStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#A8CC8C")).
+				Foreground(lipgloss.Color("#50FA7B")).
 				Bold(true)
 
 	helpTextStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFDF5")).
-			Faint(true)
+			Foreground(lipgloss.Color("#6272A4"))
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#E88388")).
+			Foreground(lipgloss.Color("#FF5555")).
 			Bold(true)
 
 	appStyle = lipgloss.NewStyle().Padding(1, 2)
@@ -51,30 +52,44 @@ func (i item) FilterValue() string { return i.ep.Title }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 
+// messages
+type episodesLoadedMsg struct{ episodes []feed.Episode }
+type episodesErrMsg struct{ err error }
+
 type Model struct {
 	list          list.Model
 	player        *player.Player
+	episodes      []feed.Episode
 	nowPlaying    *feed.Episode
+	nowPlayingIdx int
 	paused        bool
+	autoPlay      bool
+	shuffle       bool
 	err           string
 	width, height int
+	loading       bool
+	spinner       spinner.Model
 }
 
 func NewModel() Model {
+	// spinner for loading
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#BD93F9"))
+
 	episodes, _ := feed.FetchEpisodes()
 
 	items := make([]list.Item, len(episodes))
 	for i, ep := range episodes {
-		ep := ep
 		items[i] = item{ep: ep}
 	}
 
 	delegate := list.NewDefaultDelegate()
 	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
-		Foreground(lipgloss.Color("#C9A0DC")).
-		BorderForeground(lipgloss.Color("#C9A0DC"))
+		Foreground(lipgloss.Color("#BD93F9")).
+		BorderForeground(lipgloss.Color("#BD93F9"))
 	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
-		Foreground(lipgloss.Color("#9B7FBE"))
+		Foreground(lipgloss.Color("#6272A4"))
 
 	l := list.New(items, delegate, 0, 0)
 	l.Title = "Music for Programming"
@@ -83,15 +98,78 @@ func NewModel() Model {
 	l.SetFilteringEnabled(true)
 
 	return Model{
-		list:   l,
-		player: player.New(),
+		list:     l,
+		player:   player.New(),
+		episodes: episodes, // start empty
+		autoPlay: true,
+		loading:  true, // show spinner until feed loads
+		spinner:  s,
 	}
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return tea.Batch(
+		m.spinner.Tick,
+		fetchEpisodesCmd(),
+	)
+}
+
+func fetchEpisodesCmd() tea.Cmd {
+	return func() tea.Msg {
+		episodes, err := feed.FetchEpisodes()
+		if err != nil {
+			return episodesErrMsg{err}
+		}
+		return episodesLoadedMsg{episodes}
+	}
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+func (m *Model) playNext() {
+	if len(m.episodes) == 0 {
+		return
+	}
+	var nextIdx int
+	if m.shuffle {
+		nextIdx = rand.Intn(len(m.episodes))
+	} else {
+		nextIdx = (m.nowPlayingIdx + 1) % len(m.episodes)
+	}
+	ep := m.episodes[nextIdx]
+	m.nowPlayingIdx = nextIdx
+	m.nowPlaying = &ep
+	m.paused = false
+	m.err = ""
+	m.list.Select(nextIdx)
+	if err := m.player.Play(ep.URL); err != nil {
+		m.err = fmt.Sprintf("player error: %v", err)
+		m.nowPlaying = nil
+	}
+}
+
+func (m *Model) playSelected() {
+	selected, ok := m.list.SelectedItem().(item)
+	if !ok {
+		return
+	}
+	ep := selected.ep
+	// find index in episodes slice so playNext stays in sync
+	for i, e := range m.episodes {
+		if e.Number == ep.Number {
+			m.nowPlayingIdx = i
+			break
+		}
+	}
+	m.nowPlaying = &ep
+	m.paused = false
+	m.err = ""
+	if err := m.player.Play(ep.URL); err != nil {
+		m.err = fmt.Sprintf("player error: %v", err)
+		m.nowPlaying = nil
+	}
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -100,6 +178,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case episodesLoadedMsg:
+		m.loading = false
+		m.episodes = msg.episodes
+		items := make([]list.Item, len(msg.episodes))
+		for i, ep := range msg.episodes {
+			ep := ep
+			items[i] = item{ep: ep}
+		}
+		m.list.SetItems(items)
+		return m, nil
+
+	case episodesErrMsg:
+		m.loading = false
+		m.err = fmt.Sprintf("could not load feed: %v", msg.err)
+		log.Printf("feed error: %v", msg.err)
+		return m, nil
+
+	case spinner.TickMsg:
+		if m.loading {
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -109,50 +209,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
-			m.player.Stop()
-			return m, tea.Quit
+		if m.list.FilterState() != list.Filtering {
+			switch msg.String() {
 
-		case "enter":
-			if m.list.FilterState() == list.Filtering {
-				break
-			}
-			selected, ok := m.list.SelectedItem().(item)
-			if !ok {
-				break
-			}
-			ep := selected.ep
-			m.nowPlaying = &ep
-			m.paused = false
-			m.err = ""
-			if err := m.player.Play(ep.URL); err != nil {
-				m.nowPlaying = nil
-				m.err = fmt.Sprintf("player error: %v", err)
-			}
-			return m, nil
-
-		case "p":
-			if m.list.FilterState() == list.Filtering {
-				break
-			}
-			if m.player.IsPlaying() {
+			case "ctrl+c", "q":
 				m.player.Stop()
-				m.paused = true
-			} else if m.nowPlaying != nil && m.paused {
-				m.paused = false
-				_ = m.player.Play(m.nowPlaying.URL)
-			}
-			return m, nil
+				return m, tea.Quit
 
-		case "s":
-			if m.list.FilterState() == list.Filtering {
-				break
+			case "enter":
+				m.playSelected()
+				return m, nil
+
+			case " ":
+				if m.player.IsPlaying() {
+					m.player.Stop()
+					m.paused = true
+				} else if m.nowPlaying != nil && m.paused {
+					m.paused = false
+					_ = m.player.Play(m.nowPlaying.URL)
+				}
+				return m, nil
+
+			case "n":
+				m.playNext()
+				return m, nil
+
+			case "s":
+				m.player.Stop()
+				m.nowPlaying = nil
+				m.paused = false
+				return m, nil
+
+			case "r":
+				m.shuffle = !m.shuffle
+				return m, nil
+
+			case "a":
+				m.autoPlay = !m.autoPlay
+				return m, nil
 			}
-			m.player.Stop()
-			m.nowPlaying = nil
-			m.paused = false
-			return m, nil
 		}
 
 		m.list, cmd = m.list.Update(msg)
@@ -166,6 +261,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // ── View ──────────────────────────────────────────────────────────────────────
 
 func (m Model) View() string {
+	if m.loading {
+		return appStyle.Render(
+			"\n\n  " + m.spinner.View() + "  loading episodes from musicforprogramming.net...",
+		)
+	}
+
 	return appStyle.Render(
 		lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -176,20 +277,26 @@ func (m Model) View() string {
 }
 
 func (m Model) statusBar() string {
-	// Total usable width (appStyle has 2 padding on each side)
 	width := m.width - appStyle.GetHorizontalPadding()
 
 	if m.err != "" {
-		return errorStyle.
-			Width(width).
-			Render("✗ " + m.err)
+		return errorStyle.Width(width).Render("✗ " + m.err)
+	}
+
+	// build indicators for shuffle/autoplay
+	indicators := ""
+	if m.shuffle {
+		indicators += " 🔀"
+	}
+	if m.autoPlay {
+		indicators += " ↻"
 	}
 
 	var left, right string
 
 	if m.nowPlaying == nil {
-		left = "■ stopped"
-		right = "enter: play · p: pause · s: stop · q: quit"
+		left = "■ stopped" + indicators
+		right = "enter: play · space: pause · n: next · r: shuffle · a: autoplay · q: quit"
 	} else {
 		icon := "▶"
 		state := "playing"
@@ -198,22 +305,18 @@ func (m Model) statusBar() string {
 			state = "paused"
 		}
 		left = playingTextStyle.Render(icon+" "+state) +
-			fmt.Sprintf("  %02d. %s", m.nowPlaying.Number, m.nowPlaying.Title)
-		right = helpTextStyle.Render("p: pause · s: stop · q: quit")
+			fmt.Sprintf("  %02d. %s%s", m.nowPlaying.Number, m.nowPlaying.Title, indicators)
+		right = helpTextStyle.Render("space: pause · n: next · s: stop · r: shuffle · q: quit")
 	}
 
-	// Render left and right as plain strings first to measure them
 	leftWidth := lipgloss.Width(left)
 	rightWidth := lipgloss.Width(right)
-
-	// Spacer fills remaining space so right is flush to the edge
 	spacerWidth := width - leftWidth - rightWidth
 	if spacerWidth < 1 {
 		spacerWidth = 1
 	}
 	spacer := lipgloss.NewStyle().Width(spacerWidth).Render("")
 
-	// Apply the blue background ONCE across the full composed string
 	return statusBarStyle.
 		Width(width).
 		Render(left + spacer + right)
