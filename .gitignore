@@ -9,3 +9,4 @@
 # logging
 debug.log
 
+/debug.log
