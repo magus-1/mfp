@@ -1,0 +1,38 @@
+debug 2026/04/22 10:49:10 key pressed:  
+debug 2026/04/22 10:53:42 key pressed: down
+debug 2026/04/22 10:53:43 key pressed: down
+debug 2026/04/22 10:53:43 key pressed: up
+debug 2026/04/22 11:01:43 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:01:43 enter pressed, selected ok: true
+debug 2026/04/22 11:01:43 player error: exec: "mpv": executable file not found in $PATH
+debug 2026/04/22 11:02:37 key received in Update: ctrl+c filter state: unfiltered
+debug 2026/04/22 11:05:58 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:05:59 key received in Update: up filter state: unfiltered
+debug 2026/04/22 11:05:59 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:05:59 enter pressed, selected ok: true
+debug 2026/04/22 11:06:12 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:12 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:06:12 enter pressed, selected ok: true
+debug 2026/04/22 11:06:15 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:16 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:06:16 enter pressed, selected ok: true
+debug 2026/04/22 11:06:19 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:23 key received in Update: up filter state: unfiltered
+debug 2026/04/22 11:06:24 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:26 key received in Update: q filter state: unfiltered
+debug 2026/04/22 11:06:28 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:28 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:28 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:29 key received in Update: down filter state: unfiltered
+debug 2026/04/22 11:06:29 key received in Update: up filter state: unfiltered
+debug 2026/04/22 11:06:29 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:06:29 enter pressed, selected ok: true
+debug 2026/04/22 11:06:49 key received in Update: up filter state: unfiltered
+debug 2026/04/22 11:06:50 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:06:50 enter pressed, selected ok: true
+debug 2026/04/22 11:31:01 key received in Update: enter filter state: unfiltered
+debug 2026/04/22 11:31:01 enter pressed, selected ok: true
+debug 2026/04/22 11:31:04 key received in Update: c filter state: unfiltered
+debug 2026/04/22 11:31:05 key received in Update: ctrl+c filter state: unfiltered
+debug 2026/04/22 11:36:57 key received in Update:   filter state: unfiltered
+debug 2026/04/22 11:36:57 key received in Update: q filter state: unfiltered
