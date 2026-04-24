@@ -77,7 +77,7 @@ func NewModel() Model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#BD93F9"))
 
-	episodes, _ := feed.FetchEpisodes()
+	episodes := []feed.Episode{}
 
 	items := make([]list.Item, len(episodes))
 	for i, ep := range episodes {
